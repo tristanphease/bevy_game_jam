@@ -1,4 +1,4 @@
-use crate::anim::AnimInfo;
+use crate::anim::{AnimInfo, STICK_SIZE, MAJOR_HEIGHT, MINOR_HEIGHT};
 use bevy::prelude::*;
 use std::f32::consts::PI;
 
@@ -27,11 +27,6 @@ fn create_player(
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
 
-    const HEIGHT: f32 = 3.0;
-    const MINOR_HEIGHT: f32 = 2.0;
-    const ARM_POS: f32 = 1.1;
-    const STICK_SIZE: f32 = 0.2;
-
     let sphere_handle = meshes.add(Mesh::from(shape::UVSphere::default()));
 
     let material_handle = materials.add(StandardMaterial {
@@ -39,25 +34,8 @@ fn create_player(
         ..StandardMaterial::default()
     });
 
-    let main_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, HEIGHT, STICK_SIZE)));
+    let main_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, MAJOR_HEIGHT, STICK_SIZE)));
     let minor_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, MINOR_HEIGHT, STICK_SIZE)));
-
-
-    let mut left_arm_transform = Transform::from_translation(Vec3::new(0.0, ARM_POS - MINOR_HEIGHT/2.0, 0.0));
-
-    rotate_around(&mut left_arm_transform, Vec3::new(0.0, ARM_POS, 0.0), Quat::from_rotation_z(PI * 0.5));
-
-    let mut right_arm_transform = Transform::from_translation(Vec3::new(0.0, ARM_POS - MINOR_HEIGHT/2.0, 0.0));
-
-    rotate_around(&mut right_arm_transform, Vec3::new(0.0, ARM_POS, 0.0), Quat::from_rotation_z(PI * 1.8));
-
-    let mut left_leg_transform = Transform::from_translation(Vec3::new(0.0, - HEIGHT/2.0 - MINOR_HEIGHT/2.0, 0.0));
-
-    rotate_around(&mut left_leg_transform, Vec3::new(0.0, -HEIGHT/2.0, 0.0), Quat::from_rotation_z(-PI * 0.2));
-
-    let mut right_leg_transform = Transform::from_translation(Vec3::new(0.0, - HEIGHT/2.0 - MINOR_HEIGHT/2.0, 0.0));
-
-    rotate_around(&mut right_leg_transform, Vec3::new(0.0, -HEIGHT/2.0, 0.0), Quat::from_rotation_z(PI * 0.2));
 
     let mut camera_bundle = PerspectiveCameraBundle::new_3d();
     camera_bundle.transform = Transform::from_xyz(0.0, -2.0, 10.0);
@@ -73,39 +51,35 @@ fn create_player(
     let head = commands.spawn_bundle(PbrBundle {
         mesh: sphere_handle,
         material: material_handle.clone(),
-        transform: Transform::from_xyz(0.0, HEIGHT/2.0 + 1.0, 0.0),
+        transform: Transform::from_xyz(0.0, MAJOR_HEIGHT/2.0 + 1.0, 0.0),
         ..PbrBundle::default()
     }).with_children(|parent| {
 
         parent.spawn_bundle(PbrBundle {
             mesh: main_line_handle,
             material: material_handle.clone(),
-            transform: Transform::from_xyz(0.0, - HEIGHT/2.0 - 1.0, 0.0),
+            transform: Transform::from_xyz(0.0, - MAJOR_HEIGHT/2.0 - 1.0, 0.0),
             ..PbrBundle::default()
         })
         .with_children(|parent| { 
             left_arm = Some(parent.spawn_bundle(PbrBundle {
                 mesh: minor_line_handle.clone(),
                 material: material_handle.clone(),
-                transform: left_arm_transform,
                 ..PbrBundle::default()
             }).id());
             right_arm = Some(parent.spawn_bundle(PbrBundle {
                 mesh: minor_line_handle.clone(),
                 material: material_handle.clone(),
-                transform: right_arm_transform,
                 ..PbrBundle::default()
             }).id());
             left_leg = Some(parent.spawn_bundle(PbrBundle {
                 mesh: minor_line_handle.clone(),
                 material: material_handle.clone(),
-                transform: left_leg_transform,
                 ..PbrBundle::default()
             }).id());
             right_leg = Some(parent.spawn_bundle(PbrBundle {
                 mesh: minor_line_handle,
                 material: material_handle,
-                transform: right_leg_transform,
                 ..PbrBundle::default()
             }).id());
         });
