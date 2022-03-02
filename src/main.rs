@@ -1,33 +1,31 @@
-use crate::anim::get_trans_from_pos;
-use crate::anim::{AnimPos, PlayerState, STICK_SIZE, MAJOR_HEIGHT, MINOR_HEIGHT, 
-    LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG, Limb};
+use crate::map::{load_map, add_light};
+use crate::anim::{AnimPos, PlayerState, 
+    STICK_SIZE, MAJOR_HEIGHT, MINOR_HEIGHT, 
+    LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG, Limb,
+    get_trans_from_pos
+};
 use bevy::prelude::*;
 
 mod anim;
+mod map;
 
 fn main() {
     App::new()
         .init_resource::<Time>()
         .add_plugins(DefaultPlugins)
-        .add_startup_system(setup)
+        .add_startup_system(create_player)
+        .add_startup_system(load_map)
+        .add_startup_system(add_light)
         .add_system(move_player)
         .add_system(update_anims)
+        .add_system(gravity_system)
         .run();
 }
 
-fn setup(
+fn create_player(
     mut commands: Commands, 
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    
-    create_player(&mut commands, &mut meshes, &mut materials);
-}
-
-fn create_player(
-    commands: &mut Commands, 
-    meshes: &mut ResMut<Assets<Mesh>>, 
-    materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
 
     let sphere_handle = meshes.add(Mesh::from(shape::UVSphere::default()));
@@ -41,9 +39,9 @@ fn create_player(
     let minor_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, MINOR_HEIGHT, STICK_SIZE)));
 
     let mut camera_bundle = PerspectiveCameraBundle::new_3d();
-    //camera_bundle.transform = Transform::from_xyz(0.0, 10.0, -9.0)
-    //    .with_rotation(Quat::from_euler(EulerRot::XYZ, 3.9, 0.0, 3.14));
-    camera_bundle.transform = Transform::from_xyz(0.0, 0.0, 10.0);
+    camera_bundle.transform = Transform::from_xyz(0.0, 10.0, -9.0)
+        .with_rotation(Quat::from_euler(EulerRot::XYZ, 3.9, 0.0, 3.14));
+    //camera_bundle.transform = Transform::from_xyz(0.0, 0.0, 10.0);
 
     commands.spawn_bundle(camera_bundle);
 
@@ -57,7 +55,10 @@ fn create_player(
     .insert(Player)
     .insert(Sticky::Player)
     .insert(Head)
+    .insert(Gravity)
     .with_children(|parent| {
+
+        //parent.spawn_bundle(camera_bundle);
 
         parent.spawn_bundle(PbrBundle {
             mesh: main_line_handle,
@@ -155,6 +156,9 @@ enum Sticky {
 #[derive(Component)]
 struct Head;
 
+#[derive(Component)]
+struct Gravity;
+
 pub fn rotate_around(transform: &mut Transform, point: Vec3, rotation: Quat) {
     transform.translation = point + rotation * (transform.translation - point);
     transform.rotation *= rotation;
@@ -162,7 +166,7 @@ pub fn rotate_around(transform: &mut Transform, point: Vec3, rotation: Quat) {
 
 fn move_player(
     keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<&mut Transform, (With<Player>, With<Head>)>
+    mut query: Query<&mut Transform, (With<Player>, With<Head>)>,
 ) {
     let mut transform = query.get_single_mut().unwrap();
     if keyboard_input.pressed(KeyCode::W) {
@@ -203,5 +207,14 @@ fn update_anims(
             }
         }
     }
-    
+}
+
+fn gravity_system(
+    mut query: Query<&mut Transform, With<Gravity>>,
+    time: Res<Time>,
+) {
+    let delta = time.delta_seconds();
+    for mut transform in query.iter_mut() {
+        transform.translation.y -= 0.1 * delta;
+    }
 }

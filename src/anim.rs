@@ -79,37 +79,6 @@ impl Default for PlayerState {
 	}
 }
 
-/*pub fn set_idle(mut transforms: Query<&mut Transform>, player: &Player) {
-
-	let mut left_arm_trans = transforms.get_mut(player.left_arm).unwrap();
-	let limb = Limb::Arm(Pos::Left);
-	*left_arm_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.left_arm_anim = AnimPos::finished(PlayerState::Idle, limb);
-
-	let mut right_arm_trans = transforms.get_mut(player.right_arm).unwrap();
-	let limb = Limb::Arm(Pos::Right);
-	*right_arm_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.right_arm_anim = AnimPos::finished(PlayerState::Idle, limb);
-
-	let mut left_leg_trans = transforms.get_mut(player.left_leg).unwrap();
-	let limb = Limb::Leg(Pos::Left);
-	*left_leg_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.left_leg_anim = AnimPos::finished(PlayerState::Idle, limb);
-
-	let mut right_leg_trans = transforms.get_mut(player.right_leg).unwrap();
-	let limb = Limb::Leg(Pos::Right);
-	*right_leg_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.right_leg_anim = AnimPos::finished(PlayerState::Idle, limb);
-
-}
-
-pub fn start_anim(new_state: PlayerState, player: &mut Player) {
-	player.left_arm_anim = AnimPos::start_anim(new_state, LEFT_ARM, player.left_arm_anim.curr_pos);
-	player.right_arm_anim = AnimPos::start_anim(new_state, RIGHT_ARM, player.right_arm_anim.curr_pos);
-	player.left_leg_anim = AnimPos::start_anim(new_state, LEFT_LEG, player.left_leg_anim.curr_pos);
-	player.right_leg_anim = AnimPos::start_anim(new_state, RIGHT_LEG, player.right_leg_anim.curr_pos);
-}*/
-
 #[derive(Debug, Default, Component)]
 pub struct AnimPos {
 	start_pos: Vec3,
