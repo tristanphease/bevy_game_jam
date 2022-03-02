@@ -1,5 +1,5 @@
 use crate::rotate_around;
-use crate::Player;
+
 use bevy::prelude::*;
 
 //animation of player
@@ -79,96 +79,55 @@ impl Default for PlayerState {
 	}
 }
 
-pub fn set_idle(mut transforms: Query<&mut Transform>, player: &mut Player) {
+/*pub fn set_idle(mut transforms: Query<&mut Transform>, player: &Player) {
 
 	let mut left_arm_trans = transforms.get_mut(player.left_arm).unwrap();
 	let limb = Limb::Arm(Pos::Left);
 	*left_arm_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.left_arm_anim = AnimInfo::finished(PlayerState::Idle, limb);
+	player.left_arm_anim = AnimPos::finished(PlayerState::Idle, limb);
 
 	let mut right_arm_trans = transforms.get_mut(player.right_arm).unwrap();
 	let limb = Limb::Arm(Pos::Right);
 	*right_arm_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.right_arm_anim = AnimInfo::finished(PlayerState::Idle, limb);
+	player.right_arm_anim = AnimPos::finished(PlayerState::Idle, limb);
 
 	let mut left_leg_trans = transforms.get_mut(player.left_leg).unwrap();
 	let limb = Limb::Leg(Pos::Left);
 	*left_leg_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.left_leg_anim = AnimInfo::finished(PlayerState::Idle, limb);
+	player.left_leg_anim = AnimPos::finished(PlayerState::Idle, limb);
 
 	let mut right_leg_trans = transforms.get_mut(player.right_leg).unwrap();
 	let limb = Limb::Leg(Pos::Right);
 	*right_leg_trans = get_trans_from_pos(limb, get_target_pos(PlayerState::Idle, limb, 0));
-	player.right_leg_anim = AnimInfo::finished(PlayerState::Idle, limb);
+	player.right_leg_anim = AnimPos::finished(PlayerState::Idle, limb);
 
 }
 
 pub fn start_anim(new_state: PlayerState, player: &mut Player) {
-	player.left_arm_anim = AnimInfo::start_anim(new_state, LEFT_ARM, player.left_arm_anim.curr_pos);
-	player.right_arm_anim = AnimInfo::start_anim(new_state, RIGHT_ARM, player.right_arm_anim.curr_pos);
-	player.left_leg_anim = AnimInfo::start_anim(new_state, LEFT_LEG, player.left_leg_anim.curr_pos);
-	player.right_leg_anim = AnimInfo::start_anim(new_state, RIGHT_LEG, player.right_leg_anim.curr_pos);
-}
+	player.left_arm_anim = AnimPos::start_anim(new_state, LEFT_ARM, player.left_arm_anim.curr_pos);
+	player.right_arm_anim = AnimPos::start_anim(new_state, RIGHT_ARM, player.right_arm_anim.curr_pos);
+	player.left_leg_anim = AnimPos::start_anim(new_state, LEFT_LEG, player.left_leg_anim.curr_pos);
+	player.right_leg_anim = AnimPos::start_anim(new_state, RIGHT_LEG, player.right_leg_anim.curr_pos);
+}*/
 
-#[derive(Debug, Default)]
-pub struct AnimInfo {
+#[derive(Debug, Default, Component)]
+pub struct AnimPos {
 	start_pos: Vec3,
-	curr_pos: Vec3,
 	end_pos: Vec3,
-	time_takes: f32,
-	amount_through: f32,
-	index: usize,
-	anim: PlayerState,
 }
 
-impl AnimInfo {
-	//called on update, 
-	pub fn add_time(&mut self, delta_time: f32, obj_trans: &mut Transform, limb: Limb) {
-		self.amount_through = self.amount_through + delta_time / self.time_takes;
-
-		if self.amount_through > 1.0 {
-			//go to next anim
-			self.amount_through = self.amount_through - 1.0;
-			self.start_pos = self.end_pos;
-			self.index = self.index + 1;
-			if self.index == self.anim.get_anim_num_frames() {
-				self.index = 0;
-			}
-			self.end_pos = get_target_pos(self.anim, limb, self.index);
-		}
-
-		self.curr_pos = Vec3::lerp(self.start_pos, self.end_pos, self.amount_through);
-		*obj_trans = get_trans_from_pos(limb, self.curr_pos);
+impl AnimPos {
+	pub fn calc_curr_pos(&self, amount_through: f32) -> Vec3 {
+		Vec3::lerp(self.start_pos, self.end_pos, amount_through)
 	}
 
-    //returns a finished info anim, maybe temp function
-	pub fn finished(anim: PlayerState, limb: Limb) -> AnimInfo {
-		let curr_pos = get_target_pos(anim, limb, 0);
-		AnimInfo {
-			start_pos: curr_pos,
-			end_pos: curr_pos,
-			curr_pos,
-			time_takes: 1.0,
-			amount_through: 0.0,
-			index: 0,
-			anim,
-		}
-	}
-
-	pub fn start_anim(new_state: PlayerState, limb: Limb, curr_pos: Vec3) -> AnimInfo {
-		AnimInfo {
-			start_pos: curr_pos,
-			curr_pos: curr_pos,
-			end_pos: get_target_pos(new_state, limb, 0),
-			time_takes: 0.5, 
-			amount_through: 0.0,
-			index: 0,
-			anim: new_state,
-		}
+	pub fn change_pos(&mut self, anim: PlayerState, limb: Limb, index: usize) {
+		self.start_pos = self.end_pos;
+		self.end_pos = get_target_pos(anim, limb, index);
 	}
 }
 
-fn get_trans_from_pos(limb: Limb, mut pos: Vec3) -> Transform {
+pub fn get_trans_from_pos(limb: Limb, mut pos: Vec3) -> Transform {
 	let (default_pos, pivot) = match limb {
 		Limb::Arm(_) => (get_default_arm_pos(), get_arm_pivot()),
 		Limb::Leg(_) => (get_default_leg_pos(), get_leg_pivot()),
@@ -225,7 +184,7 @@ fn get_leg_pivot() -> Vec3 {
 	Vec3::new(0.0, - MAJOR_HEIGHT/2.0, 0.0)
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Component)]
 pub enum Limb {
 	Arm(Pos),
 	Leg(Pos),
