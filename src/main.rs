@@ -1,14 +1,16 @@
-use crate::anim::{AnimInfo, STICK_SIZE, MAJOR_HEIGHT, MINOR_HEIGHT};
+use crate::anim::{AnimInfo, PlayerState, STICK_SIZE, MAJOR_HEIGHT, MINOR_HEIGHT, 
+    LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG};
 use bevy::prelude::*;
-use std::f32::consts::PI;
 
 mod anim;
 
 fn main() {
     App::new()
+        .init_resource::<Time>()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
-        .add_system_set(SystemSet::new().with_system(move_player))
+        .add_system(move_player)
+        .add_system(update_player_anim)
         .run();
 }
 
@@ -38,7 +40,9 @@ fn create_player(
     let minor_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, MINOR_HEIGHT, STICK_SIZE)));
 
     let mut camera_bundle = PerspectiveCameraBundle::new_3d();
-    camera_bundle.transform = Transform::from_xyz(0.0, -2.0, 10.0);
+    //camera_bundle.transform = Transform::from_xyz(0.0, 10.0, -9.0)
+    //    .with_rotation(Quat::from_euler(EulerRot::XYZ, 3.9, 0.0, 3.14));
+    camera_bundle.transform = Transform::from_xyz(0.0, 0.0, 10.0);
 
     commands.spawn_bundle(camera_bundle);
 
@@ -125,18 +129,42 @@ fn move_player(
 ) {
     let mut player = player.get_single_mut().unwrap();
     if keyboard_input.pressed(KeyCode::W) {
-        transforms.get_mut(player.head).unwrap().translation.z -= 0.5;
+        transforms.get_mut(player.head).unwrap().translation.z += 0.5;
     }
     if keyboard_input.pressed(KeyCode::A) {
-        transforms.get_mut(player.head).unwrap().translation.x -= 0.5;
-    }
-    if keyboard_input.pressed(KeyCode::D) {
         transforms.get_mut(player.head).unwrap().translation.x += 0.5;
     }
+    if keyboard_input.pressed(KeyCode::D) {
+        transforms.get_mut(player.head).unwrap().translation.x -= 0.5;
+    }
     if keyboard_input.pressed(KeyCode::S) {
-        transforms.get_mut(player.head).unwrap().translation.z += 0.5;
+        transforms.get_mut(player.head).unwrap().translation.z -= 0.5;
     }
     if keyboard_input.pressed(KeyCode::G) {
         anim::set_idle(transforms, &mut player);
     }
+    if keyboard_input.pressed(KeyCode::T) {
+        anim::start_anim(PlayerState::Walking, &mut player);
+    }
+}
+
+fn update_player_anim(
+    mut transforms: Query<&mut Transform>,
+    mut player: Query<&mut Player>,
+    time: Res<Time>,
+) {
+    let delta = time.delta_seconds();
+    let mut player = player.get_single_mut().unwrap();
+
+    let mut left_arm_trans = transforms.get_mut(player.left_arm).unwrap();
+    player.left_arm_anim.add_time(delta, &mut left_arm_trans, LEFT_ARM);
+
+    let mut right_arm_trans = transforms.get_mut(player.right_arm).unwrap();
+    player.right_arm_anim.add_time(delta, &mut right_arm_trans, RIGHT_ARM);
+
+    let mut left_leg_trans = transforms.get_mut(player.left_leg).unwrap();
+    player.left_leg_anim.add_time(delta, &mut left_leg_trans, LEFT_LEG);
+
+    let mut right_leg_trans = transforms.get_mut(player.right_leg).unwrap();
+    player.right_leg_anim.add_time(delta, &mut right_leg_trans, RIGHT_LEG);
 }
