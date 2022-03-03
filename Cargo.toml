@@ -13,4 +13,3 @@ opt-level = 1
 
 [dependencies]
 bevy = "0.6"
-
