@@ -198,17 +198,19 @@ fn move_player(
     mut query: Query<&mut Transform, (With<Player>, With<Head>)>,
 ) {
     let mut transform = query.get_single_mut().unwrap();
+    let local_z = transform.local_z();
+    let local_x = transform.local_x();
     if keyboard_input.pressed(KeyCode::W) {
-        transform.translation.z += 0.5;
+        transform.translation += 0.5 * local_z;
     }
     if keyboard_input.pressed(KeyCode::A) {
-        transform.translation.x += 0.5;
+        transform.translation += 0.5 * local_x;
     }
     if keyboard_input.pressed(KeyCode::D) {
-        transform.translation.x -= 0.5;
+        transform.translation -= 0.5 * local_x;
     }
     if keyboard_input.pressed(KeyCode::S) {
-        transform.translation.z -= 0.5;
+        transform.translation -= 0.5 * local_z;
     }
     // if keyboard_input.pressed(KeyCode::G) {
     //     anim::set_idle(transforms, &mut player);
@@ -259,28 +261,16 @@ fn move_camera(
     let yaw = Quat::from_rotation_y(-delta_x);
 
     let (mut x, y, z) = camera_transform.rotation.to_euler(EulerRot::XYZ);
-    //x = x - delta_y;
-    //x = f32::clamp(x - delta_y, - 2.0 * PI + 0.01, PI - 0.01);
     x = add_clamp_around(x, -delta_y, PI/2.0, 0.1);
     camera_transform.rotation = Quat::from_euler(EulerRot::XYZ, x, y, z);
 
-    // let (x, mut y, z) = player_trans.rotation.to_euler(EulerRot::XYZ);
-    // y = y - delta_x;
-    // //y = f32::clamp(y - delta_x, - 2.0 * PI + 0.01, PI - 0.01);
-    // //y = wrap_val(y, -delta_x, PI/2.0);
-    // player_trans.rotation = Quat::from_euler(EulerRot::XYZ, x, y, z);
     player_trans.rotation = yaw * player_trans.rotation; // rotate around global y axis
 
 
     let mut cam_sphere = Spherical::from_vec3(camera_transform.translation);
-    //cam_sphere.theta += delta_x;
     cam_sphere.phi = f32::clamp(cam_sphere.phi + delta_y, 0.1, PI - 0.1);
-    //cam_sphere.phi = cam_sphere.phi + delta_y;
-    //cam_sphere.phi = add_clamp_sign(cam_sphere.phi, delta_y, 0.01);
     camera_transform.translation = cam_sphere.to_vec3();
 
-    //println!("x: {x}, y: {y}, z: {z}");
-    //println!("{:?}", cam_sphere.phi);
 }
 
 //awful
@@ -300,21 +290,6 @@ fn add_clamp_around(val: f32, change: f32, pos: f32, clamp_val: f32) -> f32 {
         }
         if new_val < -pos + clamp_val {
             return -pos + clamp_val;
-        }
-    }
-    return new_val;
-}
-
-//awful x2
-fn wrap_val(val: f32, change: f32, pos: f32) -> f32 {
-    let new_val = val + change;
-    if val > -pos {
-        if new_val < -pos {
-            return new_val + PI * 2.0;
-        }
-    } else if val < pos {
-        if new_val > pos {
-            return new_val - PI * 2.0;
         }
     }
     return new_val;
