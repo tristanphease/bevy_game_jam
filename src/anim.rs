@@ -1,4 +1,4 @@
-use crate::rotate_around;
+use crate::{rotate_around, Sticky, Physics};
 
 use bevy::prelude::*;
 
@@ -24,37 +24,64 @@ pub const RIGHT_LEG: Limb = Limb::Leg(Pos::Right);
 //order is left arm, right arm, left leg, right leg
 const IDLE_ANIM_FRAMES: usize = 1;
 const IDLE_ANIM: [f32; NUM_LIMBS * 3 * IDLE_ANIM_FRAMES] = [
-	-1.0, -0.5, -0.3,
-	1.0, -0.4, 0.3,
-	-0.5, -3.4, -0.2,
-	0.7, -3.3, 0.2,
+	-0.9, -3.1, 0.1,
+	0.7, -3.2, -0.4,
+	-0.5, -5.9, -0.1,
+	0.5, -5.9, 0.0,
 ];
 
 const WALKING_ANIM_FRAMES: usize = 2;
 const WALKING_ANIM: [f32; NUM_LIMBS * 3 * WALKING_ANIM_FRAMES] = [
+	0.7, -3.2, -0.4,
+	-0.9, -3.0, 0.5,
+	0.5, -5.8, 0.4,
+	-0.5, -5.9, -0.5,
 
-	-1.4, 0.0, 1.0,
-	0.5, -0.4, -1.0,
-	-0.6, -3.3, 0.6,
-	0.6, -3.4, -0.2,
-
-	-1.7, 0.3, -0.5,
-	1.2, -0.3, 0.5,
-	-1.0, -3.1, -0.2,
-	1.1, -3.2, 0.3,
-
+	-1.0, -2.9, -0.6,
+	0.9, -3.1, 0.5,
+	0.5, -5.8, -0.4,
+	-0.5, -5.9, 0.3,
 ];
 
 const JUMPING_ANIM_FRAMES: usize = 1;
+const JUMPING_ANIM: [f32; NUM_LIMBS * 3 * JUMPING_ANIM_FRAMES] = [
+	-1.8, -2.1, 0.4,
+	1.9, -1.3, 0.4,
+	-0.6, -5.5, -1.1,
+	1.0, -5.4, 1.0,
+];
 
 const RUNNING_ANIM_FRAMES: usize = 4;
+const RUNNING_ANIM: [f32; NUM_LIMBS * 3 * RUNNING_ANIM_FRAMES] = [
+	-1.1, -2.9, -0.6,
+	1.1, -2.9, 0.4,
+	-0.9, -5.7, -0.4,
+	1.0, -5.7, 0.4,
 
-const CHEERING_ANIM_FRAMES: usize = 2;
+	-0.9, -2.9, 0.9,
+	0.9, -2.9, -0.8,
+	-0.8, -5.7, 0.5,
+	0.6, -5.7, -0.9,
 
-#[derive(Copy, Clone, Debug)]
+	-1.6, -2.4, -0.7,
+	1.4, -2.3, 0.9,
+	-0.5, -5.5, -1.1,
+	0.6, -5.5, 1.1,
+
+	-1.2, -2.5, 0.9,
+	1.2, -2.8, -0.7,
+	-0.8, -5.4, 1.1,
+	0.7, -5.3, -1.3,
+];
+
+//const CHEERING_ANIM_FRAMES: usize = 2;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PlayerState {
 	Idle,
 	Walking,
+	Running,
+	Jumping,
 }
 
 impl PlayerState {
@@ -62,6 +89,8 @@ impl PlayerState {
 		match self {
 			PlayerState::Idle => IDLE_ANIM.as_slice(),
 			PlayerState::Walking => WALKING_ANIM.as_slice(),
+			PlayerState::Running => RUNNING_ANIM.as_slice(),
+			PlayerState::Jumping => JUMPING_ANIM.as_slice(),
 		}
 	}
 
@@ -69,6 +98,8 @@ impl PlayerState {
 		match self {
 			PlayerState::Idle => IDLE_ANIM_FRAMES,
 			PlayerState::Walking => WALKING_ANIM_FRAMES,
+			PlayerState::Running => RUNNING_ANIM_FRAMES,
+			PlayerState::Jumping => JUMPING_ANIM_FRAMES,
 		}
 	}
 }
@@ -90,8 +121,10 @@ impl AnimPos {
 		Vec3::lerp(self.start_pos, self.end_pos, amount_through)
 	}
 
-	pub fn change_pos(&mut self, anim: PlayerState, limb: Limb, index: usize) {
-		self.start_pos = self.end_pos;
+	pub fn change_pos(&mut self, anim: PlayerState, limb: Limb, amount_through: f32, index: usize) {
+		//println!("anim: {anim:?}, limb: {limb:?}, amount_through: {amount_through}");
+		//println!("start pos: {}, curr pos: {}, end pos: {}", self.start_pos, self.calc_curr_pos(amount_through), self.end_pos);
+		self.start_pos = self.calc_curr_pos(amount_through);
 		self.end_pos = get_target_pos(anim, limb, index);
 	}
 }
@@ -163,4 +196,97 @@ pub enum Limb {
 pub enum Pos {
 	Left,
 	Right,
+}
+
+pub fn anim_choose_system(
+	mut player_head_query: Query<(&mut AnimInfo, &Physics, &Sticky)>,
+	mut limb_query: Query<(&mut AnimPos, &Limb, &Sticky)>,
+) {
+	for (mut anim_info, physics, sticky) in player_head_query.iter_mut() {
+		let speed = physics.velocity.length_squared();
+
+		let mut changed = false;
+		if !physics.grounded {
+			if anim_info.anim != PlayerState::Jumping {
+				anim_info.change_anim(PlayerState::Jumping);
+				changed = true;
+			}
+		} else {
+			if speed > 6.0 {
+				if anim_info.anim != PlayerState::Running {
+					anim_info.change_anim(PlayerState::Running);
+					changed = true;
+				}
+			} else if speed > 2.0 {
+				if anim_info.anim != PlayerState::Walking {
+					anim_info.change_anim(PlayerState::Walking);
+					changed = true;
+				}
+			} else {
+				if anim_info.anim != PlayerState::Idle {
+					anim_info.change_anim(PlayerState::Idle);
+					changed = true;
+				}
+			}
+		}
+
+		if changed {
+			for (mut anim_pos, limb, limb_sticky) in limb_query.iter_mut() {
+				if sticky == limb_sticky {
+					anim_pos.change_pos(anim_info.anim, *limb, anim_info.amount_through, 0);
+				}
+			}
+		}
+	}
+}
+
+pub fn update_anims(
+    mut player_query: Query<(&mut AnimInfo, &Sticky)>,
+    mut query: Query<(&mut Transform, &mut AnimPos, &Limb, &Sticky)>,
+    time: Res<Time>,
+) {
+    let delta = time.delta_seconds();
+
+    for (mut anim_info, player_sticky) in player_query.iter_mut() {
+        let change = anim_info.add_time(delta);
+        for (mut transform, mut anim_pos, limb, sticky) in query.iter_mut() {
+            if sticky == player_sticky {
+                if change {
+                    anim_pos.change_pos(anim_info.anim, *limb, 1.0, anim_info.index);
+                }
+                *transform = get_trans_from_pos(*limb, anim_pos.calc_curr_pos(anim_info.amount_through));
+            }
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct AnimInfo {
+    pub time_takes: f32,
+    pub amount_through: f32,
+    pub index: usize,
+    pub anim: PlayerState,
+}
+
+impl AnimInfo {
+    pub fn add_time(&mut self, delta_time: f32) -> bool {
+        self.amount_through = self.amount_through + delta_time / self.time_takes;
+
+        if self.amount_through > 1.0 {
+            //go to next anim
+            self.amount_through = self.amount_through - 1.0;
+            self.index = self.index + 1;
+            if self.index == self.anim.get_anim_num_frames() {
+                self.index = 0;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    pub fn change_anim(&mut self, new_anim: PlayerState) {
+    	self.index = new_anim.get_anim_num_frames() - 1;
+    	self.amount_through = 0.0;
+    	self.anim = new_anim;
+    }
 }

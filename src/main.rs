@@ -2,10 +2,10 @@ use crate::spherical::Spherical;
 use bevy::input::mouse::MouseMotion;
 use crate::map::Collision;
 use crate::map::{on_load_map, add_map, add_light};
-use crate::anim::{AnimPos, PlayerState, 
+use crate::anim::{AnimPos, AnimInfo, PlayerState, 
     STICK_SIZE, MAJOR_HEIGHT, MINOR_HEIGHT, 
-    LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG, Limb,
-    get_trans_from_pos
+    LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG,
+    update_anims, anim_choose_system
 };
 use crate::state::AppState;
 use std::f32::consts::PI;
@@ -38,6 +38,7 @@ fn main() {
                 .with_system(update_anims)
                 .with_system(physics_system)
                 .with_system(gravity_system)
+                .with_system(anim_choose_system)
                 .with_system(cursor_grab_system)
                 .with_system(move_camera)
         )
@@ -62,7 +63,7 @@ fn create_player(
     let minor_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, MINOR_HEIGHT, STICK_SIZE)));
 
     let mut camera_bundle = PerspectiveCameraBundle::new_3d();
-    camera_bundle.transform = Transform::from_xyz(0.0, 10.0, -9.0)
+    camera_bundle.transform = Transform::from_xyz(0.0, 8.0, -9.0)
         .with_rotation(Quat::from_euler(EulerRot::XYZ, 3.9, 0.0, 3.14));
 
     //first, sphere head
@@ -82,6 +83,12 @@ fn create_player(
         ],
         velocity: Vec3::new(0.0, 0.0, 0.0),
         grounded: false,
+    })
+    .insert(AnimInfo {
+        time_takes: 1.0,
+        amount_through: 1.0,
+        index: 0,
+        anim: PlayerState::Idle,
     })
     .with_children(|parent| {
 
@@ -136,46 +143,13 @@ fn create_player(
             .insert(RIGHT_LEG);
         });
     });
-
-    commands.spawn().insert(AnimInfo {
-        time_takes: 1.0,
-        amount_through: 1.0,
-        index: 0,
-        anim: PlayerState::Idle,
-    })
-    .insert(Sticky::Player);
-}
-
-#[derive(Component)]
-struct AnimInfo {
-    time_takes: f32,
-    amount_through: f32,
-    index: usize,
-    anim: PlayerState,
-}
-
-impl AnimInfo {
-    pub fn add_time(&mut self, delta_time: f32) -> bool {
-        self.amount_through = self.amount_through + delta_time / self.time_takes;
-
-        if self.amount_through > 1.0 {
-            //go to next anim
-            self.amount_through = self.amount_through - 1.0;
-            self.index = self.index + 1;
-            if self.index == self.anim.get_anim_num_frames() {
-                self.index = 0;
-            }
-            return true;
-        }
-        return false;
-    }
 }
 
 #[derive(Component)]
 struct Player;
 
 #[derive(Component, PartialEq, Eq)]
-enum Sticky {
+pub enum Sticky {
     Player,
     Enemy,
 }
@@ -184,10 +158,10 @@ enum Sticky {
 struct Head;
 
 #[derive(Component)]
-struct Physics {
-    hitboxes: Vec<(Vec3, Vec3)>,
-    velocity: Vec3,
-    grounded: bool,
+pub struct Physics {
+    pub hitboxes: Vec<(Vec3, Vec3)>,
+    pub velocity: Vec3,
+    pub grounded: bool,
 }
 
 pub fn rotate_around(transform: &mut Transform, point: Vec3, rotation: Quat) {
@@ -217,25 +191,7 @@ fn move_player(
     }
 }
 
-fn update_anims(
-    mut player_query: Query<(&mut AnimInfo, &Sticky)>,
-    mut query: Query<(&mut Transform, &mut AnimPos, &Limb, &Sticky)>,
-    time: Res<Time>,
-) {
-    let delta = time.delta_seconds();
 
-    for (mut anim_info, player_sticky) in player_query.iter_mut() {
-        let change = anim_info.add_time(delta);
-        for (mut transform, mut anim_pos, limb, sticky) in query.iter_mut() {
-            if sticky == player_sticky {
-                if change {
-                    anim_pos.change_pos(anim_info.anim, *limb, anim_info.index);
-                }
-                *transform = get_trans_from_pos(*limb, anim_pos.calc_curr_pos(anim_info.amount_through));
-            }
-        }
-    }
-}
 
 fn move_camera(
     windows: Res<Windows>,

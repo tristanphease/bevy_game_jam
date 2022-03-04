@@ -5,7 +5,7 @@ use crate::state::AppState;
 //walls are defined as x, y, z, x_scale, y_scale, z_scale
 const NUM_WALLS: usize = 1;
 const WALLS: [f32; NUM_WALLS * 6] = [
-	0.0, -0.25, 0.0, 11.0, 0.5, 11.0,
+	0.0, -0.25, 0.0, 21.0, 0.5, 21.0,
 ];
 
 #[derive(Component)]
