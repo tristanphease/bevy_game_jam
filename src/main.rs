@@ -78,8 +78,7 @@ fn create_player(
     .insert(Head)
     .insert(Physics {
         hitboxes: vec![
-            (Vec3::new(0.0, -3.5, 0.0), Vec3::new(0.25, 5.0, 0.25)),
-            (Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 1.0)),
+            (Vec3::new(0.0, -3.5, 0.0), Vec3::new(0.4, 6.0, 0.4)),
         ],
         velocity: Vec3::new(0.0, 0.0, 0.0),
         grounded: false,
