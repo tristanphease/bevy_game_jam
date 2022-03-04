@@ -91,6 +91,12 @@ const SPIN_ANIM: [f32; NUM_LIMBS * 3 * SPIN_ANIM_FRAMES] = [
 	1.8, -4.5, -0.4,
 ];
 
+const IDLE_ANIM_TIME: f32 = 1.0;
+const WALKING_ANIM_TIME: f32 = 0.3;
+const RUNNING_ANIM_TIME: f32 = 1.0;
+const JUMPING_ANIM_TIME: f32 = 0.8;
+const SPIN_ANIM_TIME: f32 = 1.0;
+
 //const CHEERING_ANIM_FRAMES: usize = 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -122,6 +128,16 @@ impl PlayerState {
 			PlayerState::Spin => SPIN_ANIM_FRAMES,
 		}
 	}
+
+	pub fn get_anim_time(&self) -> f32 {
+		match self {
+			PlayerState::Idle => IDLE_ANIM_TIME,
+			PlayerState::Walking => WALKING_ANIM_TIME,
+			PlayerState::Running => RUNNING_ANIM_TIME,
+			PlayerState::Jumping => JUMPING_ANIM_TIME,
+			PlayerState::Spin => SPIN_ANIM_TIME,
+		}
+	}
 }
 
 impl Default for PlayerState {
@@ -144,6 +160,14 @@ impl AnimPos {
 	pub fn change_pos(&mut self, anim: PlayerState, limb: Limb, amount_through: f32, index: usize) {
 		self.start_pos = self.calc_curr_pos(amount_through);
 		self.end_pos = get_target_pos(anim, limb, index);
+	}
+
+	pub fn default_from_limb(limb: Limb, anim: PlayerState) -> AnimPos {
+		let pos = get_target_pos(anim, limb, 0);
+		AnimPos {
+			start_pos: pos,
+			end_pos: pos,
+		}
 	}
 }
 
@@ -300,6 +324,7 @@ impl AnimInfo {
     pub fn change_anim(&mut self, new_anim: PlayerState) {
     	self.index = new_anim.get_anim_num_frames() - 1;
     	self.amount_through = 0.0;
+    	self.time_takes = new_anim.get_anim_time();
     	self.anim = new_anim;
     }
 }

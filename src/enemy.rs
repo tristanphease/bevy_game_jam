@@ -6,12 +6,13 @@ use crate::{Sticky, Enemy,
 };
 use crate::anim::PlayerState;
 
-const ENEMY_HEALTH: u16 = 5;
+const ENEMY_HEALTH: u16 = 3;
+const ENEMY_NUM: u16 = 3;
 
 pub struct EnemyMaterials {
-	red: Handle<StandardMaterial>,
-	green: Handle<StandardMaterial>,
-	blue: Handle<StandardMaterial>,
+	pub red: Handle<StandardMaterial>,
+	pub green: Handle<StandardMaterial>,
+	pub blue: Handle<StandardMaterial>,
 }
 
 pub fn create_enemies(
@@ -42,15 +43,45 @@ pub fn create_enemies(
     let main_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, MAJOR_HEIGHT, STICK_SIZE)));
     let minor_line_handle = meshes.add(Mesh::from(shape::Box::new(STICK_SIZE, MINOR_HEIGHT, STICK_SIZE)));
 
-    create_enemy(&mut commands, sphere_handle.clone(), red_material_handle.clone(), main_line_handle.clone(), minor_line_handle.clone());
-    create_enemy(&mut commands, sphere_handle.clone(), green_material_handle.clone(), main_line_handle.clone(), minor_line_handle.clone());
-    create_enemy(&mut commands, sphere_handle, blue_material_handle.clone(), main_line_handle, minor_line_handle);
+    create_enemy(
+    	&mut commands, 
+    	sphere_handle.clone(), 
+    	red_material_handle.clone(), 
+    	main_line_handle.clone(), 
+    	minor_line_handle.clone(),
+    	EnemyColour::Red,
+    );
+    create_enemy(
+    	&mut commands, 
+    	sphere_handle.clone(), 
+    	green_material_handle.clone(), 
+    	main_line_handle.clone(), 
+    	minor_line_handle.clone(),
+    	EnemyColour::Green,
+    );
+    create_enemy(
+    	&mut commands, 
+    	sphere_handle, 
+    	blue_material_handle.clone(), 
+    	main_line_handle, 
+    	minor_line_handle,
+    	EnemyColour::Blue,
+    );
 
     commands.insert_resource(EnemyMaterials {
     	red: red_material_handle,
     	green: green_material_handle,
     	blue: blue_material_handle,
     });
+
+    commands.insert_resource(EnemyNum {
+    	number: ENEMY_NUM,
+    });
+}
+
+#[derive(Default)]
+pub struct EnemyNum {
+	pub number: u16,
 }
 
 pub fn create_enemy(
@@ -59,12 +90,13 @@ pub fn create_enemy(
     material_handle: Handle<StandardMaterial>,
     main_line_handle: Handle<Mesh>,
     minor_line_handle: Handle<Mesh>,
+    colour: EnemyColour,
 ) {
     //first, sphere head
     commands.spawn_bundle(PbrBundle {
         mesh: sphere_handle,
         material: material_handle.clone(),
-        transform: Transform::from_xyz(20.0 + fastrand::f32() * 20.0, MAJOR_HEIGHT + MINOR_HEIGHT , 0.0),
+        transform: Transform::from_xyz((fastrand::f32() - 0.5) * 100.0, MAJOR_HEIGHT + MINOR_HEIGHT + 1.0, (fastrand::f32() - 0.5) * 100.0),
         ..PbrBundle::default()
     })
     .insert(Enemy)
@@ -73,6 +105,7 @@ pub fn create_enemy(
     .insert(Health {
     	amount: ENEMY_HEALTH,
     })
+    .insert(colour)
     .insert(AnimInfo {
         time_takes: 1.0,
         amount_through: 1.0,
@@ -84,6 +117,7 @@ pub fn create_enemy(
         parent.spawn_bundle(PbrBundle {
             mesh: main_line_handle,
             material: material_handle.clone(),
+            transform: Transform::from_xyz(0.0, - MAJOR_HEIGHT/2.0 - 1.0, 0.0),
             ..PbrBundle::default()
         })
         .insert(Enemy)
@@ -136,15 +170,9 @@ pub struct Health {
 	pub amount: u16,
 }
 
-pub fn place_enemies_system(
-	mut query: Query<&mut Transform, (With<Enemy>, With<Head>)>,
-) {
-
-	let y = MAJOR_HEIGHT + MINOR_HEIGHT + 1.0;
-
-	for mut enemy_trans in query.iter_mut() {
-		enemy_trans.translation.x = (fastrand::f32() - 0.5) * 40.0;
-		enemy_trans.translation.y = y;
-		enemy_trans.translation.z = (fastrand::f32() - 0.5) * 40.0;
-	}
+#[derive(Component)]
+pub enum EnemyColour {
+	Red,
+	Green,
+	Blue,
 }

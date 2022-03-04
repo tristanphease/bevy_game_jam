@@ -7,10 +7,10 @@ use crate::anim::{AnimPos, AnimInfo, PlayerState,
     LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG,
     update_anims, anim_choose_system, spin_sticky_system,
 };
-use crate::state::{AppState, check_lose_system, game_over_system};
-use crate::enemy::{create_enemies, place_enemies_system};
+use crate::state::{AppState, check_lose_system, game_over_system, game_win_system, restart_game_system};
+use crate::enemy::create_enemies;
 use crate::shot::{PlayerMaterial, ShotMesh, create_shot, create_shot_mesh_system, shot_physics_system,
-    remove_shot_system, shot_sticky_collision_check_system,
+    remove_shot_system, shot_sticky_collision_check_system, enemy_shot_system,
 };
 use std::f32::consts::PI;
 use bevy::prelude::*;
@@ -22,7 +22,7 @@ mod spherical;
 mod enemy;
 mod shot;
 
-const VELOCITY: f32 = 0.8;
+const VELOCITY: f32 = 4.5;
 const JUMP_HEIGHT: f32 = 4.0;
 
 const PLAYER_SHOT_DELAY: f32 = 0.5;
@@ -59,10 +59,23 @@ fn main() {
                 .with_system(shot_physics_system)
                 .with_system(remove_shot_system)
                 .with_system(shot_sticky_collision_check_system)
+                .with_system(enemy_shot_system)
         )
         .add_system_set(
             SystemSet::on_enter(AppState::GameOver)
                 .with_system(game_over_system)
+        )
+        .add_system_set(
+            SystemSet::on_update(AppState::GameOver)
+                .with_system(restart_game_system)
+        )
+        .add_system_set(
+            SystemSet::on_enter(AppState::Win)
+                .with_system(game_win_system)
+        )
+        .add_system_set(
+            SystemSet::on_update(AppState::Win)
+                .with_system(restart_game_system)
         )
         .run();
 }
@@ -131,7 +144,7 @@ fn create_player(
             })
             .insert(Player)
             .insert(Sticky::Player)
-            .insert(AnimPos::default())
+            .insert(AnimPos::default_from_limb(LEFT_ARM, PlayerState::Idle))
             .insert(LEFT_ARM);
 
             parent.spawn_bundle(PbrBundle {
@@ -141,7 +154,7 @@ fn create_player(
             })
             .insert(Player)
             .insert(Sticky::Player)
-            .insert(AnimPos::default())
+            .insert(AnimPos::default_from_limb(RIGHT_ARM, PlayerState::Idle))
             .insert(RIGHT_ARM);
             parent.spawn_bundle(PbrBundle {
                 mesh: minor_line_handle.clone(),
@@ -150,7 +163,7 @@ fn create_player(
             })
             .insert(Player)
             .insert(Sticky::Player)
-            .insert(AnimPos::default())
+            .insert(AnimPos::default_from_limb(LEFT_LEG, PlayerState::Idle))
             .insert(LEFT_LEG);
             
             parent.spawn_bundle(PbrBundle {
@@ -160,7 +173,7 @@ fn create_player(
             })
             .insert(Player)
             .insert(Sticky::Player)
-            .insert(AnimPos::default())
+            .insert(AnimPos::default_from_limb(RIGHT_LEG, PlayerState::Idle))
             .insert(RIGHT_LEG);
         });
     });
@@ -206,7 +219,7 @@ fn move_player(
     let velocity = if physics.grounded {
         VELOCITY
     } else {
-        VELOCITY * 0.2
+        VELOCITY * 0.03
     };
 
     if keyboard_input.pressed(KeyCode::W) {
@@ -408,7 +421,7 @@ fn physics_system(
                             transform.translation.y += min;
                             physics.grounded = true;
                             physics.velocity.y = f32::max(0.0, physics.velocity.y);
-                            physics.velocity *= 0.9;
+                            physics.velocity *= 0.6;
                         },
                         1 => {
                             transform.translation.y -= min;
