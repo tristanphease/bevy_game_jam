@@ -351,6 +351,7 @@ name = "bevy_game_jam"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "fastrand",
 ]
 
 [[package]]

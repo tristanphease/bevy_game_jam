@@ -5,9 +5,13 @@ use crate::map::{on_load_map, add_map, add_light};
 use crate::anim::{AnimPos, AnimInfo, PlayerState, 
     STICK_SIZE, MAJOR_HEIGHT, MINOR_HEIGHT, 
     LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG,
-    update_anims, anim_choose_system
+    update_anims, anim_choose_system, spin_sticky_system,
 };
-use crate::state::AppState;
+use crate::state::{AppState, check_lose_system, game_over_system};
+use crate::enemy::{create_enemies, place_enemies_system};
+use crate::shot::{PlayerMaterial, ShotMesh, create_shot, create_shot_mesh_system, shot_physics_system,
+    remove_shot_system, shot_sticky_collision_check_system,
+};
 use std::f32::consts::PI;
 use bevy::prelude::*;
 
@@ -15,6 +19,13 @@ mod anim;
 mod map;
 mod state;
 mod spherical;
+mod enemy;
+mod shot;
+
+const VELOCITY: f32 = 0.8;
+const JUMP_HEIGHT: f32 = 4.0;
+
+const PLAYER_SHOT_DELAY: f32 = 0.5;
 
 fn main() {
     App::new()
@@ -28,19 +39,30 @@ fn main() {
         .add_system_set(
             SystemSet::on_enter(AppState::Playing)
                 .with_system(create_player)
+                .with_system(create_enemies)
+                .with_system(create_shot_mesh_system)
                 .with_system(add_light)
                 .with_system(add_map)
-                     
         )
         .add_system_set(
             SystemSet::on_update(AppState::Playing)
                 .with_system(move_player)
                 .with_system(update_anims)
+                .with_system(spin_sticky_system)
                 .with_system(physics_system)
                 .with_system(gravity_system)
                 .with_system(anim_choose_system)
                 .with_system(cursor_grab_system)
+                .with_system(player_shoot_system)
                 .with_system(move_camera)
+                .with_system(check_lose_system)
+                .with_system(shot_physics_system)
+                .with_system(remove_shot_system)
+                .with_system(shot_sticky_collision_check_system)
+        )
+        .add_system_set(
+            SystemSet::on_enter(AppState::GameOver)
+                .with_system(game_over_system)
         )
         .run();
 }
@@ -133,7 +155,7 @@ fn create_player(
             
             parent.spawn_bundle(PbrBundle {
                 mesh: minor_line_handle,
-                material: material_handle,
+                material: material_handle.clone(),
                 ..PbrBundle::default()
             })
             .insert(Player)
@@ -142,10 +164,17 @@ fn create_player(
             .insert(RIGHT_LEG);
         });
     });
+
+    commands.insert_resource(PlayerMaterial {
+        player_mat: material_handle,
+    });
 }
 
 #[derive(Component)]
-struct Player;
+pub struct Player;
+
+#[derive(Component)]
+pub struct Enemy;
 
 #[derive(Component, PartialEq, Eq)]
 pub enum Sticky {
@@ -154,7 +183,7 @@ pub enum Sticky {
 }
 
 #[derive(Component)]
-struct Head;
+pub struct Head;
 
 #[derive(Component)]
 pub struct Physics {
@@ -173,24 +202,60 @@ fn move_player(
     mut query: Query<(&mut Physics, &GlobalTransform), (With<Player>, With<Head>)>,
 ) {
     let (mut physics, trans) = query.get_single_mut().unwrap();
+
+    let velocity = if physics.grounded {
+        VELOCITY
+    } else {
+        VELOCITY * 0.2
+    };
+
     if keyboard_input.pressed(KeyCode::W) {
-        physics.velocity += trans.rotation * Vec3::new(0.0, 0.0, 0.5);
+        physics.velocity += trans.rotation * Vec3::new(0.0, 0.0, velocity);
     }
     if keyboard_input.pressed(KeyCode::A) {
-        physics.velocity += trans.rotation * Vec3::new(0.5, 0.0, 0.0);
+        physics.velocity += trans.rotation * Vec3::new(velocity, 0.0, 0.0);
     }
     if keyboard_input.pressed(KeyCode::D) {
-        physics.velocity += trans.rotation * Vec3::new(-0.5, 0.0, 0.0);
+        physics.velocity += trans.rotation * Vec3::new(-velocity, 0.0, 0.0);
     }
     if keyboard_input.pressed(KeyCode::S) {
-        physics.velocity += trans.rotation * Vec3::new(0.0, 0.0, -0.5);
+        physics.velocity += trans.rotation * Vec3::new(0.0, 0.0, -velocity);
     }
     if keyboard_input.pressed(KeyCode::Space) && physics.grounded {
-        physics.velocity += trans.rotation * Vec3::new(0.0, 4.0, 0.0);
+        physics.velocity += trans.rotation * Vec3::new(0.0, JUMP_HEIGHT, 0.0);
     }
 }
 
+fn player_shoot_system(
+    mut commands: Commands,
+    shot_mesh: Res<ShotMesh>,
+    player_mat: Res<PlayerMaterial>,
+    mouse_input: Res<Input<MouseButton>>,
+    player_query: Query<&Transform, (With<Player>, With<Head>)>,
+    camera_query: Query<&GlobalTransform, (With<Camera>, Without<Head>)>,
+    mut shot_cooldown: Local<ShotCooldown>,
+    time: Res<Time>
+) {
+    shot_cooldown.cooldown -= time.delta_seconds();
+    if mouse_input.just_pressed(MouseButton::Left) && shot_cooldown.cooldown <= 0.0 {
+        let player_trans = player_query.get_single().unwrap();
+        let camera_trans = camera_query.get_single().unwrap();
+        create_shot(
+            &mut commands,
+            shot_mesh.shot_handle.clone(),
+            player_mat.player_mat.clone(),
+            player_trans.translation,
+            camera_trans.rotation * Vec3::new(0.0, 0.0, -20.0),
+            Sticky::Player,
+        );
+        shot_cooldown.cooldown = PLAYER_SHOT_DELAY;
+    }
+}
 
+#[derive(Default)]
+struct ShotCooldown {
+    cooldown: f32,
+}
 
 fn move_camera(
     windows: Res<Windows>,
@@ -375,7 +440,7 @@ fn physics_system(
     }
 }
 
-fn detect_collision(hitbox: (Vec3, Vec3), wall: (Vec3, Vec3)) -> bool {
+pub fn detect_collision(hitbox: (Vec3, Vec3), wall: (Vec3, Vec3)) -> bool {
     
     if f32::abs(hitbox.0.x - wall.0.x) <= hitbox.1.x/2.0 + wall.1.x/2.0 &&
        f32::abs(hitbox.0.y - wall.0.y) <= hitbox.1.y/2.0 + wall.1.y/2.0 &&

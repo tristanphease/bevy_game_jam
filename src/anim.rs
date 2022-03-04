@@ -1,4 +1,4 @@
-use crate::{rotate_around, Sticky, Physics};
+use crate::{rotate_around, Sticky, Physics, Head};
 
 use bevy::prelude::*;
 
@@ -32,7 +32,7 @@ const IDLE_ANIM: [f32; NUM_LIMBS * 3 * IDLE_ANIM_FRAMES] = [
 
 const WALKING_ANIM_FRAMES: usize = 2;
 const WALKING_ANIM: [f32; NUM_LIMBS * 3 * WALKING_ANIM_FRAMES] = [
-	0.7, -3.2, -0.4,
+	/*0.7, -3.2, -0.4,
 	-0.9, -3.0, 0.5,
 	0.5, -5.8, 0.4,
 	-0.5, -5.9, -0.5,
@@ -40,7 +40,16 @@ const WALKING_ANIM: [f32; NUM_LIMBS * 3 * WALKING_ANIM_FRAMES] = [
 	-1.0, -2.9, -0.6,
 	0.9, -3.1, 0.5,
 	0.5, -5.8, -0.4,
-	-0.5, -5.9, 0.3,
+	-0.5, -5.9, 0.3,*/
+	-0.6, -3.1, -0.6,
+	1.2, -2.9, 0.5,
+	-0.7, -5.8, 0.4,
+	0.9, -5.7, -0.4,
+
+	-0.7, -2.9, 0.9,
+	1.1, -2.9, -0.7,
+	-0.7, -5.8, -0.5,
+	0.9, -5.6, 0.6,
 ];
 
 const JUMPING_ANIM_FRAMES: usize = 1;
@@ -74,6 +83,14 @@ const RUNNING_ANIM: [f32; NUM_LIMBS * 3 * RUNNING_ANIM_FRAMES] = [
 	0.7, -5.3, -1.3,
 ];
 
+const SPIN_ANIM_FRAMES: usize = 1;
+const SPIN_ANIM: [f32; NUM_LIMBS * 3 * SPIN_ANIM_FRAMES] = [
+	-1.8, -1.6, -0.6,
+	1.9, -1.2, 0.5,
+	0.0, -5.9, 0.3,
+	1.8, -4.5, -0.4,
+];
+
 //const CHEERING_ANIM_FRAMES: usize = 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -82,6 +99,7 @@ pub enum PlayerState {
 	Walking,
 	Running,
 	Jumping,
+	Spin,
 }
 
 impl PlayerState {
@@ -91,6 +109,7 @@ impl PlayerState {
 			PlayerState::Walking => WALKING_ANIM.as_slice(),
 			PlayerState::Running => RUNNING_ANIM.as_slice(),
 			PlayerState::Jumping => JUMPING_ANIM.as_slice(),
+			PlayerState::Spin => SPIN_ANIM.as_slice(),
 		}
 	}
 
@@ -100,6 +119,7 @@ impl PlayerState {
 			PlayerState::Walking => WALKING_ANIM_FRAMES,
 			PlayerState::Running => RUNNING_ANIM_FRAMES,
 			PlayerState::Jumping => JUMPING_ANIM_FRAMES,
+			PlayerState::Spin => SPIN_ANIM_FRAMES,
 		}
 	}
 }
@@ -122,8 +142,6 @@ impl AnimPos {
 	}
 
 	pub fn change_pos(&mut self, anim: PlayerState, limb: Limb, amount_through: f32, index: usize) {
-		//println!("anim: {anim:?}, limb: {limb:?}, amount_through: {amount_through}");
-		//println!("start pos: {}, curr pos: {}, end pos: {}", self.start_pos, self.calc_curr_pos(amount_through), self.end_pos);
 		self.start_pos = self.calc_curr_pos(amount_through);
 		self.end_pos = get_target_pos(anim, limb, index);
 	}
@@ -136,11 +154,6 @@ pub fn get_trans_from_pos(limb: Limb, mut pos: Vec3) -> Transform {
 	};
 
 	let mut trans = Transform::from_translation(default_pos);
-	//let quat = Quat::from_rotation_arc(default_pos.normalize(), pos.normalize());
-	
-	//let cross = Vec3::cross(default_pos, pos);
-	//let quat = Quat::from_xyzw(cross[0], cross[1], cross[2], f32::sqrt(default_pos.length() * default_pos.length() * pos.length() * pos.length()) + Vec3::dot(default_pos, pos));
-
 	pos = pos - default_pos;
 	let quat = Quat::from_rotation_arc(Vec3::Y, pos.normalize());
 
@@ -212,12 +225,12 @@ pub fn anim_choose_system(
 				changed = true;
 			}
 		} else {
-			if speed > 6.0 {
+			if speed > 3.0 {
 				if anim_info.anim != PlayerState::Running {
 					anim_info.change_anim(PlayerState::Running);
 					changed = true;
 				}
-			} else if speed > 2.0 {
+			} else if speed > 0.5 {
 				if anim_info.anim != PlayerState::Walking {
 					anim_info.change_anim(PlayerState::Walking);
 					changed = true;
@@ -289,4 +302,14 @@ impl AnimInfo {
     	self.amount_through = 0.0;
     	self.anim = new_anim;
     }
+}
+
+pub fn spin_sticky_system(
+	mut query: Query<(&mut Transform, &AnimInfo), With<Head>>
+) {
+	for (mut trans, anim_info) in query.iter_mut() {
+		if anim_info.anim == PlayerState::Spin {
+			trans.rotation = trans.rotation * Quat::from_axis_angle(Vec3::Y, 0.1);
+		}
+	}
 }
