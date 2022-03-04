@@ -37,6 +37,7 @@ fn main() {
                 .with_system(move_player)
                 .with_system(update_anims)
                 .with_system(physics_system)
+                .with_system(gravity_system)
                 .with_system(cursor_grab_system)
                 .with_system(move_camera)
         )
@@ -63,15 +64,12 @@ fn create_player(
     let mut camera_bundle = PerspectiveCameraBundle::new_3d();
     camera_bundle.transform = Transform::from_xyz(0.0, 10.0, -9.0)
         .with_rotation(Quat::from_euler(EulerRot::XYZ, 3.9, 0.0, 3.14));
-    //camera_bundle.transform = Transform::from_xyz(0.0, 0.0, 10.0);
-
-    //commands.spawn_bundle(camera_bundle);
 
     //first, sphere head
     commands.spawn_bundle(PbrBundle {
         mesh: sphere_handle,
         material: material_handle.clone(),
-        //transform: Transform::from_xyz(0.0, MAJOR_HEIGHT + 1.0, 0.0),
+        transform: Transform::from_xyz(0.0, MAJOR_HEIGHT + MINOR_HEIGHT, 0.0),
         ..PbrBundle::default()
     })
     .insert(Player)
@@ -79,9 +77,11 @@ fn create_player(
     .insert(Head)
     .insert(Physics {
         hitboxes: vec![
-            (Vec3::new(0.0, -3.5, 0.0), Vec3::new(0.25, 2.5, 0.25)),
+            (Vec3::new(0.0, -3.5, 0.0), Vec3::new(0.25, 5.0, 0.25)),
             (Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 1.0)),
         ],
+        velocity: Vec3::new(0.0, 0.0, 0.0),
+        grounded: false,
     })
     .with_children(|parent| {
 
@@ -186,6 +186,8 @@ struct Head;
 #[derive(Component)]
 struct Physics {
     hitboxes: Vec<(Vec3, Vec3)>,
+    velocity: Vec3,
+    grounded: bool,
 }
 
 pub fn rotate_around(transform: &mut Transform, point: Vec3, rotation: Quat) {
@@ -195,29 +197,24 @@ pub fn rotate_around(transform: &mut Transform, point: Vec3, rotation: Quat) {
 
 fn move_player(
     keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<&mut Transform, (With<Player>, With<Head>)>,
+    mut query: Query<(&mut Physics, &GlobalTransform), (With<Player>, With<Head>)>,
 ) {
-    let mut transform = query.get_single_mut().unwrap();
-    let local_z = transform.local_z();
-    let local_x = transform.local_x();
+    let (mut physics, trans) = query.get_single_mut().unwrap();
     if keyboard_input.pressed(KeyCode::W) {
-        transform.translation += 0.5 * local_z;
+        physics.velocity += trans.rotation * Vec3::new(0.0, 0.0, 0.5);
     }
     if keyboard_input.pressed(KeyCode::A) {
-        transform.translation += 0.5 * local_x;
+        physics.velocity += trans.rotation * Vec3::new(0.5, 0.0, 0.0);
     }
     if keyboard_input.pressed(KeyCode::D) {
-        transform.translation -= 0.5 * local_x;
+        physics.velocity += trans.rotation * Vec3::new(-0.5, 0.0, 0.0);
     }
     if keyboard_input.pressed(KeyCode::S) {
-        transform.translation -= 0.5 * local_z;
+        physics.velocity += trans.rotation * Vec3::new(0.0, 0.0, -0.5);
     }
-    // if keyboard_input.pressed(KeyCode::G) {
-    //     anim::set_idle(transforms, &mut player);
-    // }
-    // if keyboard_input.pressed(KeyCode::T) {
-    //     anim::start_anim(PlayerState::Walking, &mut player);
-    // }
+    if keyboard_input.pressed(KeyCode::Space) && physics.grounded {
+        physics.velocity += trans.rotation * Vec3::new(0.0, 4.0, 0.0);
+    }
 }
 
 fn update_anims(
@@ -323,17 +320,113 @@ fn cursor_grab_system(
     }
 }
 
+fn gravity_system(
+    mut query: Query<&mut Physics>,
+) {
+    for mut physics in query.iter_mut() {
+        physics.velocity.y -= 0.2;
+    }
+}
+
 fn physics_system(
-    mut query: Query<&mut Transform, (With<Physics>, Without<Collision>)>,
+    mut query: Query<(&mut Transform, &mut Physics, &GlobalTransform), Without<Collision>>,
     collision_query: Query<&Transform, With<Collision>>,
     time: Res<Time>,
 ) {
     let delta = time.delta_seconds();
-    for mut transform in query.iter_mut() {
-        transform.translation.y -= 0.1 * delta;
+    for (mut transform, mut physics, global_trans) in query.iter_mut() {
 
-        for collision_object in collision_query.iter() {
+        transform.translation += physics.velocity * delta;
+
+        physics.grounded = false;
+
+        for collision_trans in collision_query.iter() {
             //handle collision rudimentary
+            for &(trans_hitbox, scale_hitbox) in physics.hitboxes.iter() {
+                let hitbox_pos = trans_hitbox + global_trans.translation;
+                if detect_collision((hitbox_pos, scale_hitbox), (collision_trans.translation, collision_trans.scale)) {
+                    //move player to nearest edge
+                    
+                    let player_top = hitbox_pos.y + scale_hitbox.y/2.0;
+                    let player_bottom = hitbox_pos.y - scale_hitbox.y/2.0;
+
+                    let collision_top = collision_trans.translation.y + collision_trans.scale.y/2.0;
+                    let collision_bottom = collision_trans.translation.y - collision_trans.scale.y/2.0;
+
+                    let up_diff = collision_top - player_bottom;
+                    let down_diff = player_top - collision_bottom;
+
+                    let player_left = hitbox_pos.x + scale_hitbox.x/2.0;
+                    let player_right = hitbox_pos.x - scale_hitbox.x/2.0;
+
+                    let collision_left = collision_trans.translation.x + collision_trans.scale.x/2.0;
+                    let collision_right = collision_trans.translation.x - collision_trans.scale.x/2.0;
+
+                    let left_diff = collision_left - player_right;
+                    let right_diff = player_left - collision_right;
+
+                    let player_forward = hitbox_pos.z + scale_hitbox.z/2.0;
+                    let player_back = hitbox_pos.z - scale_hitbox.z/2.0;
+
+                    let collision_forward = collision_trans.translation.z + collision_trans.scale.z/2.0;
+                    let collision_back = collision_trans.translation.z - collision_trans.scale.z/2.0;
+
+                    let forward_diff = collision_forward - player_back;
+                    let back_diff = player_forward - collision_back;
+
+                    let array = [up_diff, down_diff, left_diff, right_diff, forward_diff, back_diff];
+                    let (min_index, min) = array.as_slice().iter().enumerate().reduce(|accum, item| {
+                        if accum.1 <= item.1 {
+                            accum
+                        } else {
+                            item
+                        }
+                    }).unwrap();
+
+                    match min_index {
+                        0 => {
+                            transform.translation.y += min;
+                            physics.grounded = true;
+                            physics.velocity.y = f32::max(0.0, physics.velocity.y);
+                            physics.velocity *= 0.9;
+                        },
+                        1 => {
+                            transform.translation.y -= min;
+                            physics.velocity.y = f32::min(0.0, physics.velocity.y);
+                        },
+                        2 => {
+                            transform.translation.x += min;
+                            physics.velocity.x = f32::max(0.0, physics.velocity.x);
+                        },
+                        3 => {
+                            transform.translation.x -= min;
+                            physics.velocity.x = f32::min(0.0, physics.velocity.x);
+                        },
+                        4 => {
+                            transform.translation.z += min;
+                            physics.velocity.z = f32::max(0.0, physics.velocity.z);
+                        },
+                        5 => {
+                            transform.translation.z -= min;
+                            physics.velocity.z = f32::min(0.0, physics.velocity.z);
+                        },
+                        _ => unreachable!(),
+                    }
+
+                    break;
+                }
+            }
         }
     }
+}
+
+fn detect_collision(hitbox: (Vec3, Vec3), wall: (Vec3, Vec3)) -> bool {
+    
+    if f32::abs(hitbox.0.x - wall.0.x) <= hitbox.1.x/2.0 + wall.1.x/2.0 &&
+       f32::abs(hitbox.0.y - wall.0.y) <= hitbox.1.y/2.0 + wall.1.y/2.0 &&
+       f32::abs(hitbox.0.z - wall.0.z) <= hitbox.1.z/2.0 + wall.1.z/2.0 {
+
+        return true;
+   }
+   return false;
 }
